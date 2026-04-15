@@ -1,92 +1,150 @@
 import streamlit as st
 
-st.title("🩺 ICU Family Communication Assistant (Offline Mode)")
+st.set_page_config(page_title="ICU Communication Assistant", layout="centered")
 
-st.header("Patient Details")
+st.title("🩺 ICU Family Communication Assistant")
 
-name = st.text_input("Patient Name")
-age = st.number_input("Age", 0, 120)
-diagnosis = st.text_input("Diagnosis")
+# ---------------- SESSION STATE ----------------
+if "generated" not in st.session_state:
+    st.session_state.generated = False
 
-st.header("Clinical Data")
+if "family_text" not in st.session_state:
+    st.session_state.family_text = ""
 
-sofa = st.slider("SOFA Score", 0, 20)
-pf = st.number_input("P/F Ratio", value=150)
-trend = st.selectbox("Trend", ["improving", "stable", "worsening"])
-icu_day = st.number_input("ICU Day", value=1)
+if "doctor_text" not in st.session_state:
+    st.session_state.doctor_text = ""
 
-st.header("Organ Support")
+# ---------------- VIEW SELECT ----------------
+view_mode = st.radio("Select View", ["Doctor View", "Family View"], horizontal=True)
 
-ventilator = st.checkbox("Ventilator")
-pressors = st.checkbox("Vasopressors")
-dialysis = st.checkbox("Dialysis (CRRT)")
-sedation = st.checkbox("Sedation")
+st.divider()
 
-def get_mortality(sofa):
-    if sofa <= 6:
-        return "Low risk (<10%)"
-    elif 7 <= sofa <= 9:
-        return "Moderate risk (15–20%)"
-    elif 10 <= sofa <= 12:
-        return "High risk (40–50%)"
+# ================= FUNCTIONS =================
+
+def interpret_risk(prob):
+    if prob < 0.3:
+        return "Low", "Low predicted mortality risk", "The overall situation appears relatively stable."
+    elif prob <= 0.7:
+        return "Moderate", "Moderate predicted mortality risk", "The condition is serious and requires close monitoring."
     else:
-        return "Very high risk (>80%)"
+        return "High", "High predicted mortality risk", "The condition is critical and requires intensive care."
 
-def get_ards(pf):
-    if pf >= 200:
-        return "Mild lung involvement"
-    elif 100 <= pf < 200:
-        return "Moderate lung involvement"
-    else:
-        return "Severe lung involvement"
+def trend_text(tr):
+    if tr == "improving":
+        return "Showing improvement"
+    elif tr == "worsening":
+        return "Condition worsening"
+    return "Stable"
 
-def explain_supports():
-    explanations = []
-    
+def family_supports(ventilator, pressors, dialysis, sedation):
+    s = []
     if ventilator:
-        explanations.append("a breathing machine helping the lungs rest")
+        s.append("a breathing machine")
     if pressors:
-        explanations.append("medications supporting blood pressure")
+        s.append("medications for blood pressure")
     if dialysis:
-        explanations.append("a machine cleaning the blood")
+        s.append("a machine to clean the blood")
     if sedation:
-        explanations.append("a medically controlled sleep for comfort")
-    
-    return explanations
+        s.append("medications for comfort")
+    return ", ".join(s) if s else "close monitoring"
 
-def trend_text(trend):
-    if trend == "improving":
-        return "There are encouraging signs of improvement."
-    elif trend == "worsening":
-        return "We are concerned as the condition is worsening."
-    else:
-        return "The condition is currently stable."
+def doctor_supports(ventilator, pressors, dialysis, sedation):
+    s = []
+    if ventilator:
+        s.append("Mechanical Ventilation")
+    if pressors:
+        s.append("Vasopressors")
+    if dialysis:
+        s.append("CRRT")
+    if sedation:
+        s.append("Sedation")
+    return ", ".join(s)
 
-if st.button("Generate Family Update"):
+# ================= DOCTOR VIEW =================
+if view_mode == "Doctor View":
 
-    mortality = get_mortality(sofa)
-    ards = get_ards(pf)
-    supports = explain_supports()
-    trend_msg = trend_text(trend)
+    st.header("🧑‍⚕️ Doctor Input")
 
-    support_text = ", ".join(supports) if supports else "no major organ support required at present"
+    name = st.text_input("Patient Name")
+    age = st.number_input("Age", 0, 120)
+    diagnosis = st.text_input("Diagnosis")
 
-    response = f"""
-Hello, I understand this is a very difficult and stressful time for you.
+    st.header("Clinical Data")
+    sofa = st.slider("SOFA Score", 0, 20)
+    pf = st.number_input("P/F Ratio", value=150)
+    trend = st.selectbox("Trend", ["improving", "stable", "worsening"])
+    icu_day = st.number_input("ICU Day", value=1)
 
-Your loved one, {name}, is currently in the ICU being treated for {diagnosis}.
+    probability = st.number_input("Predicted mortality probability (0–1)", 0.0, 1.0, step=0.01)
 
-At present:
-- {trend_msg}
-- Lung condition: {ards}
-- Severity: {mortality}
+    st.subheader("Organ Support")
+    ventilator = st.checkbox("Ventilator")
+    pressors = st.checkbox("Vasopressors")
+    dialysis = st.checkbox("Dialysis")
+    sedation = st.checkbox("Sedation")
 
-We are supporting the body using {support_text}.
+    if st.button("Generate ICU Update"):
 
-In the next 24 hours, we will focus on stabilizing the condition and monitoring closely.
+        risk, doctor_risk_text, family_risk_text = interpret_risk(probability)
 
-What questions do you have for us today?
+        doctor_output = f"""
+ICU DOCTOR SUMMARY
+
+Patient: {name}, {age}
+Diagnosis: {diagnosis}
+
+SOFA: {sofa}
+PF Ratio: {pf}
+Trend: {trend}
+ICU Day: {icu_day}
+
+Support: {doctor_supports(ventilator, pressors, dialysis, sedation)}
+
+Predicted Probability: {probability:.2f}
+Risk Category: {risk}
+Interpretation: {doctor_risk_text}
 """
 
-    st.subheader("📢 ICU Family Update")
-    st.write(response)
+        family_output = f"""
+ICU FAMILY UPDATE
+
+Patient: {name}
+Diagnosis: {diagnosis}
+
+Current condition:
+{trend_text(trend)}
+
+What this means:
+{family_risk_text}
+
+Support:
+{family_supports(ventilator, pressors, dialysis, sedation)}
+
+Next 24 hours:
+Close monitoring and ongoing treatment
+
+We understand this is a difficult time. The ICU team is doing everything possible and will keep you updated regularly.
+"""
+
+        st.session_state.generated = True
+        st.session_state.family_text = family_output
+        st.session_state.doctor_text = doctor_output
+
+        st.success("Update generated. Switch to Family View.")
+
+    if st.session_state.generated:
+        st.subheader("📄 Doctor Summary")
+        st.code(st.session_state.doctor_text)
+
+# ================= FAMILY VIEW =================
+else:
+
+    st.header("💙 Family Communication")
+
+    if not st.session_state.generated:
+        st.warning("Please generate update in Doctor View first.")
+    else:
+        st.write(st.session_state.family_text)
+
+        st.subheader("📋 Copy Message")
+        st.code(st.session_state.family_text)
