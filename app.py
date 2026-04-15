@@ -14,51 +14,69 @@ if "family_text" not in st.session_state:
 if "doctor_text" not in st.session_state:
     st.session_state.doctor_text = ""
 
-# ---------------- VIEW SELECT ----------------
+# ---------------- VIEW ----------------
 view_mode = st.radio("Select View", ["Doctor View", "Family View"], horizontal=True)
 
 st.divider()
 
-# ================= FUNCTIONS =================
+# ---------------- FUNCTIONS ----------------
 
 def interpret_risk(prob):
     if prob < 0.3:
-        return "Low", "Low predicted mortality risk", "The overall situation appears relatively stable."
+        return "Mild", \
+        "Low predicted mortality risk", \
+        "At present, the condition appears relatively stable, and we are hopeful with ongoing treatment."
+
     elif prob <= 0.7:
-        return "Moderate", "Moderate predicted mortality risk", "The condition is serious and requires close monitoring."
+        return "Moderate", \
+        "Moderate predicted mortality risk", \
+        "The illness is serious, and there is a significant risk. Recovery is possible, but uncertain, and requires close monitoring."
+
     else:
-        return "High", "High predicted mortality risk", "The condition is critical and requires intensive care."
+        return "High", \
+        "High predicted mortality risk", \
+        "The condition is very critical, and there is a high risk to life at this stage. Recovery is uncertain, and we are providing maximum possible support."
 
 def trend_text(tr):
     if tr == "improving":
-        return "Showing improvement"
+        return "There are encouraging signs of improvement."
     elif tr == "worsening":
-        return "Condition worsening"
-    return "Stable"
+        return "The condition is worsening."
+    return "The condition is currently stable."
 
-def family_supports(ventilator, pressors, dialysis, sedation):
-    s = []
-    if ventilator:
-        s.append("a breathing machine")
-    if pressors:
-        s.append("medications for blood pressure")
-    if dialysis:
-        s.append("a machine to clean the blood")
-    if sedation:
-        s.append("medications for comfort")
-    return ", ".join(s) if s else "close monitoring"
+def family_supports(v, p, d, s):
+    supports = []
+    if v:
+        supports.append("a breathing machine")
+    if p:
+        supports.append("medications for blood pressure")
+    if d:
+        supports.append("a machine to clean the blood")
+    if s:
+        supports.append("medications for comfort")
+    return ", ".join(supports) if supports else "close monitoring"
 
-def doctor_supports(ventilator, pressors, dialysis, sedation):
-    s = []
-    if ventilator:
-        s.append("Mechanical Ventilation")
-    if pressors:
-        s.append("Vasopressors")
-    if dialysis:
-        s.append("CRRT")
-    if sedation:
-        s.append("Sedation")
-    return ", ".join(s)
+def doctor_supports(v, p, d, s):
+    supports = []
+    if v:
+        supports.append("Mechanical Ventilation")
+    if p:
+        supports.append("Vasopressors")
+    if d:
+        supports.append("CRRT")
+    if s:
+        supports.append("Sedation")
+    return ", ".join(supports)
+
+def key_concerns(v, p, d):
+    concerns = []
+    if v:
+        concerns.append("Breathing support requirement")
+    if p:
+        concerns.append("Low blood pressure requiring support")
+    if d:
+        concerns.append("Kidney function support")
+    return concerns
 
 # ================= DOCTOR VIEW =================
 if view_mode == "Doctor View":
@@ -87,6 +105,10 @@ if view_mode == "Doctor View":
 
         risk, doctor_risk_text, family_risk_text = interpret_risk(probability)
 
+        concerns_list = key_concerns(ventilator, pressors, dialysis)
+        concerns_text = ", ".join(concerns_list) if concerns_list else "No major organ concerns at present"
+
+        # Doctor summary
         doctor_output = f"""
 ICU DOCTOR SUMMARY
 
@@ -103,8 +125,11 @@ Support: {doctor_supports(ventilator, pressors, dialysis, sedation)}
 Predicted Probability: {probability:.2f}
 Risk Category: {risk}
 Interpretation: {doctor_risk_text}
+
+Key Concerns: {concerns_text}
 """
 
+        # Family communication
         family_output = f"""
 ICU FAMILY UPDATE
 
@@ -114,8 +139,14 @@ Diagnosis: {diagnosis}
 Current condition:
 {trend_text(trend)}
 
+Risk level:
+{risk}
+
 What this means:
 {family_risk_text}
+
+Key concerns right now:
+{concerns_text}
 
 Support:
 {family_supports(ventilator, pressors, dialysis, sedation)}
